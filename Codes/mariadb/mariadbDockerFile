@@ -1,0 +1,17 @@
+# Use the official MariaDB image from the Docker Hub
+FROM mariadb:latest
+
+# Set environment variables for MariaDB
+ENV MYSQL_ROOT_PASSWORD=rootpassword
+ENV MYSQL_DATABASE=inception_db
+ENV MYSQL_USER=inception_user
+ENV MYSQL_PASSWORD=inception_password
+
+# Expose the default MariaDB port
+EXPOSE 3306
+
+# Copy any initialization scripts to the Docker entrypoint directory
+COPY ./initdb.d /docker-entrypoint-initdb.d
+
+# Start the MariaDB service
+CMD ["mysqld"]
