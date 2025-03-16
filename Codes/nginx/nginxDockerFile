@@ -1,17 +1,47 @@
+# Use Debian Buster as the base OS
+# - Debian Buster is the latest stable release of Debian
+# - It is a lightweight OS that is perfect for running Nginx
+# Other options include Ubuntu, CentOS, and Alpine
 FROM debian:buster
 
-# install nginx and openssl
-RUN apt-get update && apt-get install -y nginx openssl
+# Update package list & install Nginx + OpenSSL for HTTPS 
+# - The apt update command updates the package list
+# - The apt install command installs Nginx and OpenSSL
+# - The apt-get clean command cleans up the package cache
+# -y: Assume Yes to all queries and do not prompt
+RUN apt update && apt install -y nginx openssl curl && apt-get clean
 
-# create a self-signed certificate
-RUN openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/nginx-selfsigned.key -out /etc/ssl/certs/nginx-selfsigned.crt -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=www.example.com"
+# Copy the Nginx configuration file
+# - This file will be copied to the /etc/nginx/sites-available directory
+# - The default Nginx configuration file will be replaced with this file
+COPY ./nginxConfigFile /etc/nginx/sites-available/default
 
-# copy the configuration file
-COPY nginx.conf /etc/nginx/sites-available/default
+# Generate a self-signed SSL certificate
+# - The certificate will be stored in the /etc/ssl/certs directory
+# - The private key will be stored in the /etc/ssl/private directory
+# - The certificate will be valid for 365 
+# -x509: This option outputs a self-signed certificate instead of a certificate request
+# -nodes: This option tells OpenSSL to skip the option to secure the certificate with a passphrase
+# -days: This option specifies the number of days the certificate will be valid for
+# -newkey rsa:2048: This option creates a new certificate request and a new private key
+# -keyout: This option specifies the filename to write the newly created private key to
+# -out: This option specifies the filename to write the newly created certificate to
+# -subj: This option sets the subject of the certificate
+# -C: Country Name (2 letter code)
+# -ST: State or Province Name (full name)
+# -L: Locality Name (eg, city)
+# -O: Organization Name (eg, company)
+# -OU: Organizational Unit Name (eg, section)
+# -CN: Common Name (e.g. server FQDN or YOUR name)
+RUN openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout \
+/etc/ssl/private/nginx-selfsigned.key -out /etc/ssl/certs/nginx-selfsigned.crt \
+ -subj "/C=DE /ST=Baden-Wuerttemberg /L=Heilbronn /O=42 /OU=42Heilbronn /CN=localhost"
 
-# expose the port
-EXPOSE 80 443
-
-# start the server
+# run the command to start Nginx
+# - The -g option allows you to pass a global configuration directive to Nginx
+# - The daemon off; directive tells Nginx to run in the foreground
 CMD ["nginx", "-g", "daemon off;"]
 
+# result:
+# - The Dockerfile will build an image that runs Nginx with a self-signed SSL certificate
+# End 

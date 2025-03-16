@@ -1,21 +1,46 @@
+
+#  Create a server block to listen on HTTP (port 80)
 server {
-    listen 80;
-    server_name localhost;
+    listen 80 default_server;      # Listen for HTTP requests on port 80
+    listen [::]:80 default_server; # Listen for IPv6 HTTP requests
 
-    location / {
-        proxy_pass http://127.0.0.1:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+    #  Define the domain name (set via an environment variable)
+    server_name ${DOMAIN_NAME}; # Domain name or IP address
 
-    location /static/ {
-        alias /path/to/static/files/;
-    }
-
-    error_page 500 502 503 504 /50x.html;
-    location = /50x.html {
-        root /usr/share/nginx/html;
-    }
+    #  Redirect all HTTP requests to HTTPS with a 301 (Permanent Redirect)
+    return 301 https://$host$request_uri;
 }
+
+# set config for a virtual server
+server {
+    # Listen for HTTPS connections on IPv4 and IPv6
+    listen 443 ssl;         #Standard port for HTTPS
+    listen [::]:443 ssl;    # IPv6 support for HTTPS
+
+    # SSL certificate and key locations (Self-signed or Let's Encrypt)
+    ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;    # SSL certificate file 
+    ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key; # SSL private key file location
+
+    # Enforce modern SSL/TLS protocols
+    ssl_protocols TLSv1.2 TLSv1.3; # TLSv1.2 and TLSv1.3 are the latest versions of the SSL/TLS protocol
+
+    # Define the web root directory and default index file
+    index index.php; # Default index file
+    # Root directory
+    root /var/www/html; # Root directory of the server
+
+    # Server name (Uses environment variable for flexibility)
+    server_name $DOMAIN_NAME; # Domain name or IP address
+
+    # Location block to handle PHP requests (WordPress)
+    location ~ \.php$ {
+        try_files $uri =404; # Check if the file exists
+        fastcgi_pass wordpress:9000; # Pass PHP requests to the WordPress container
+        include fastcgi_params; # Include the FastCGI parameters
+        fastcgi_index index.php; # Default index file
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name; # Set the PHP script filename
+        fastcgi_param PATH_INFO $fastcgi_path_info; # Set the PHP path info
+    }
+
+}
+
