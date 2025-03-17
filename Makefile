@@ -14,7 +14,7 @@
 NAME = inception
 
 # Docker Compose Path
-DC = docker-compose -f Codes/docker-compose.yml --env-file Codes/.env
+DC = docker-compose -f srcs/docker-compose.yml --env-file srcs/.env
 VOLUME_PATH = /home/mmansuri/data
 
 # Default Target
@@ -35,16 +35,6 @@ build:folders
 up:build
 	@$(DC) up 
 
-# Stop the docker container
-down:
-	@echo "Stopping the inception...\n"
-	@$(DC) down
-
-# Stop the docker container
-stop:
-	@echo "Stopping the inception...\n"
-	@$(DC) stop
-
 # Start the docker container
 start:
 	@echo "Starting the inception...\n"
@@ -55,14 +45,29 @@ restart:
 	@echo "Restarting the inception...\n"
 	@$(DC) restart
 
+# Stop the docker container
+down:
+	@echo "Stopping the inception...\n"
+	@$(DC) down
+
+# Stop the docker container
+stop:
+	@echo "Stopping the inception...\n"
+	@$(DC) stop
+
 clean:
-	docker rm -f mariadb wordpress nginx
-	docker rmi -f mariadb wordpress nginx
-	docker volume rm $(shell docker volume ls -qf dangling=true)
-	docker system prune -a -f
+	@echo "Cleaning the inception...\n"
+	# Stop and remove all containers related to the project
+	@docker ps -q --filter "name=mariadb\|wordpress\|nginx" | xargs -r docker rm -f
+	#Remove images associated with the project (forcefully)
+	@docker images -q mariadb wordpress nginx | xargs -r docker rmi -f
+	# Clean up unused (dangling) volumes
+	@docker volume ls -qf dangling=true | xargs -r docker volume rm
+	# Perform a full system prune (remove all unused Docker data)
+	@docker system prune -a -f
 
 # Remove all the docker containers and images and start fresh
 re: clean all
 
 # Phony Targets
-.PHONY: all build up down stop start restart clean re folders
+.PHONY: all build up start restart down stop clean re folders
