@@ -1,0 +1,121 @@
+# Description: This file is used to define the services that will be used in the project.
+# Define the Docker Compose version (3.7 is a stable version).
+version: '3.7'
+
+# Define the services that will be used in the project.
+services:
+  # Define the database service.
+  mariadb:
+    # Define the build context for the service.
+    build: ./mariadb
+    # Define the container name for the service.
+    container_name: mariadb
+    # Define the environment file for the service.
+    env_file:
+      - .env
+    # Define the volumes for the service.
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    # Define the ports for the service.
+    ports:
+      - "3306:3306"
+    # Define the networks for the service.
+    networks:
+      - inception_network
+    # Define the restart policy for the service.
+    restart: always
+    # Define the image for the service.
+    image: mariadb
+
+  # nginx service
+  nginx:
+    # Define the build context for the service.
+    build: ./nginx
+    # Define the container name for the service.
+    container_name: nginx
+    # Define the volumes for the service.
+    volumes:
+      - wordpress_data:/var/www/html
+    # Define the ports for the service.
+    ports:
+      - "443:443"
+    # Define the networks for the service.
+    networks:
+      - inception_network
+    # Define the restart policy for the service.
+    restart: always
+    # Define the image for the service.
+    image: nginx
+    # Define the environment file for the service.
+    env_file:
+      - .env
+    # Define the depends_on for the service.
+    depends_on:
+      - mariadb
+      - wordpress
+
+  # wordpress service
+  wordpress:
+    # Define the build context for the service.
+    build: ./wordpress
+    # Define the ports for the service.
+    ports:
+      - "9000:9000"
+    # Define the container name for the service.
+    container_name: wordpress
+    # Define the volumes for the service.
+    volumes:
+      - wordpress_data:/var/www/html
+    # Define the networks for the service.
+    networks:
+      - inception_network
+    # Define the restart policy for the service.
+    restart: always
+    # Define the image for the service.
+    image: wordpress
+    # Define the environment file for the service.
+    env_file:
+      - .env
+    # Define the depends_on for the service.
+    depends_on:
+      - mariadb
+
+# Define the volumes for the services.
+volumes:
+# Define the mariadb_data volume.
+  mariadb_data:
+    driver: local  # Define the driver for the volume.
+    driver_opts:   # Define the driver options for the volume.
+      o: 'bind'     # Binds the volume to the host machine.
+      type: 'none'  # Define the type for the volume.
+      device: /home/mmansuri/data/mariadb  # Define the device for the volume.
+
+# Define the wordpress_data volume.
+  wordpress_data:
+    driver: local  # Define the driver for the volume.
+    driver_opts:   # Define the driver options for the volume.
+      o: 'bind'     # Binds the volume to the host machine.
+      type: 'none'  # Define the type for the volume.
+      device: /home/mmansuri/data/wordpress  # Define the device for the volume.
+
+  
+
+# Define the networks for the services.
+networks:
+  inception_network:  # Define the inception_network network.
+    driver: bridge    # Define the driver for the network.
+
+# What is a bridge network?
+# Containers inside a bridge network can communicate with each other but are isolated from other networks.
+# Used for single-host networking (all containers run on the same machine).
+# Each container gets its own IP address inside the bridge network.
+#  Why use a custom bridge network?
+# Service Discovery – Containers can use container names instead of IPs.
+# Security – Containers inside this network cannot be accessed from outside unless ports are exposed.
+# Performance – Optimized for container-to-container communication.
+#  Example:
+# The MariaDB container can be reached from WordPress using mariadb:3306 instead of an IP.
+# The WordPress container can be reached from Nginx using wordpress:9000 instead of an IP.
+
+# End of the file.
+
