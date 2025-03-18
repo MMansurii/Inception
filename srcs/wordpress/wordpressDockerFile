@@ -1,0 +1,115 @@
+# --------------------  Base Image --------------------
+# Use Debian Buster as the base image for the container.
+FROM debian:buster
+
+# --------------------  Set Environment Variables --------------------
+# Prevents interactive prompts during package installation.
+# tells Debian not to ask for input and to automatically choose the default options.
+ENV DEBIAN_FRONTEND=noninteractive 
+
+# Define PHP version, WP-CLI URL, and WordPress installation path.
+ENV PHP_VERSION=7.3 \
+    WP_CLI_URL=https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
+    WP_PATH=/var/www/html \
+    PHP_FPM_CONF=/etc/php/${PHP_VERSION}/fpm/pool.d/www.conf \
+    PHP_PACKAGES="php php${PHP_VERSION}-fpm php-mysql curl ca-certificates unzip"
+# Define WP-CLI download URL.
+# Set the default WordPress installation path.
+# Define PHP-FPM configuration path.
+# List of required PHP packages.
+
+# -------------------- Install Required Packages --------------------
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends ${PHP_PACKAGES} &&\
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*  
+# Update package lists and upgrade installed packages.
+# `apt-get clean`: Clears unnecessary cached package files to save space.
+# `rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*`: Removes temporary files to reduce image size.
+
+# --------------------  Create Required Directories --------------------
+RUN install -d -m 755 -o www-data -g www-data ${WP_PATH} /run/php  
+#   `install -d`: Ensures directories exist before setting permissions.
+#   `-m 755`: Sets directory permissions:
+#    - `7` → Owner: Read, Write, Execute.
+#    - `5` → Group: Read, Execute.
+#    - `5` → Others: Read, Execute.
+#   `-o www-data -g www-data`: Sets ownership of directories to `www-data`, 
+#    which is the default web server user in Debian-based systems.
+
+##########################################################################################
+##########################################################################################
+
+# --------------------  Install WP-CLI --------------------
+RUN curl -sSLo /usr/local/bin/wp ${WP_CLI_URL} && \
+    chmod +x /usr/local/bin/wp  
+# Make WP-CLI globally accessible.
+#   `curl -sSLo`: 
+#    - `-sS`: Silent mode but still shows errors.
+#    - `-L`: Follows redirects if the file has moved.
+#    - `-o /usr/local/bin/wp`: Saves WP-CLI to `/usr/local/bin/wp` so it's globally accessible.
+#   `chmod +x /usr/local/bin/wp`: Makes WP-CLI executable.
+
+# --------------------  Download & Configure WordPress --------------------
+RUN if [ ! -f "${WP_PATH}/wp-config.php" ]; then \
+    wp core download --allow-root && \
+    wp config create \
+    --dbname="${DATABASE_NAME}" \
+    --dbuser="${DATABASE_USER}" \
+    --dbpass="${DATABASE_PASSWORD}" \
+    --dbhost="mariadb" \
+    --allow-root; \
+    else echo "✅ WordPress is already installed. Skipping download."; fi  # Skip download if WordPress is already installed.
+# Check if WordPress is already installed.
+# Download WordPress core files.
+# Generate the `wp-config.php` file with database credentials.
+# Set the WordPress database name.
+# Set the database user.
+# Set the database password.
+# Define the database host 
+# Allow WP-CLI to run as root. 
+#  If `wp-config.php` exists, skip the installation process to avoid unnecessary overwrites.
+
+# --------------------  Fix PHP-FPM Listening Port --------------------
+RUN sed -i "s|listen = /run/php/php${PHP_VERSION}-fpm.sock|listen = 9000|g" ${PHP_FPM_CONF}  
+#   `sed -i`: Edits the file in place (no need to create a backup).
+#   `s|...|...|g`: Finds the default socket configuration and replaces it with `9000`.
+#   Ensures PHP-FPM listens on port 9000, which is required for Nginx to communicate with PHP.
+
+##########################################################################################
+##########################################################################################
+
+# --------------------  Install & Configure WordPress --------------------
+RUN sleep 20 && \
+    wp core install \
+    --url="${DOMAIN_NAME}" \
+    --title="${WORDPRESS_TITLE}" \
+    --admin_user="${WORDPRESS_USER_ADMIN}" \
+    --admin_password="${WORDPRESS_PASSWORD_ADMIN}" \
+    --admin_email="${WORDPRESS_EMAIL_ADMIN}" \
+    --allow-root && \
+    wp user create "${WORDPRESS_USER}" "${WORDPRESS_EMAIL_USER}" \
+    --user_pass="${WORDPRESS_PASSWORD_USER}" --role=author --allow-root && \
+    wp option update home "https://${DOMAIN_NAME}" --allow-root && \
+    wp option update siteurl "https://${DOMAIN_NAME}" --allow-root
+
+# --------------------  Set Correct File Permissions --------------------
+RUN chmod -R 755 ${WP_PATH}/wp-content/uploads && \
+    chown -R www-data:www-data ${WP_PATH}/wp-content/uploads  
+# Ensure uploads are writable.
+#   `chmod -R 755`:
+#    - `7` → Owner: Read, Write, Execute.
+#    - `5` → Group: Read, Execute.
+#    - `5` → Others: Read, Execute.
+#   `-R` → Recursive, applying permissions to all subdirectories.
+#   `chown -R www-data:www-data` → Ensures WordPress can write uploaded files.
+
+# --------------------  Start PHP-FPM --------------------
+CMD ["php-fpm${PHP_VERSION}", "-F"]  
+# Run PHP-FPM in the foreground.
+#  `CMD` sets the default command that runs when the container starts.
+#  `"php-fpm${PHP_VERSION}"` → Starts the PHP-FPM service.
+#  `-F` → Runs in the foreground so the container doesn’t exit.
+
+# END
+
+

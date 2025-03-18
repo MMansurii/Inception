@@ -55,15 +55,16 @@ stop:
 	@echo "Stopping the inception...\n"
 	@$(DC) stop
 
+# Stop and remove all containers related to the project
+# Remove images associated with the project (forcefully)
+# Clean up unused (dangling) volumes
+# Perform a full system prune (remove all unused Docker data)
+	
 clean:
 	@echo "Cleaning the inception...\n"
-	# Stop and remove all containers related to the project
 	@docker ps -q --filter "name=mariadb\|wordpress\|nginx" | xargs -r docker rm -f
-	#Remove images associated with the project (forcefully)
 	@docker images -q mariadb wordpress nginx | xargs -r docker rmi -f
-	# Clean up unused (dangling) volumes
 	@docker volume ls -qf dangling=true | xargs -r docker volume rm
-	# Perform a full system prune (remove all unused Docker data)
 	@docker system prune -a -f
 
 # Remove all the docker containers and images and start fresh
