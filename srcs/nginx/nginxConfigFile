@@ -1,28 +1,21 @@
 
 #  Create a server block to listen on HTTP (port 80)
-server {
-    listen 80 default_server;      # Listen for HTTP requests on port 80
-    listen [::]:80 default_server; # Listen for IPv6 HTTP requests
+# server {
+#     listen 80 default_server;      # Listen for HTTP requests on port 80
+#     listen [::]:80 default_server; # Listen for IPv6 HTTP requests
 
-    #  Define the domain name (set via an environment variable)
-    server_name ${DOMAIN_NAME}; # Domain name or IP address
+#     #  Define the domain name (set via an environment variable)
+#     server_name ${DOMAIN_NAME}; # Domain name or IP address
 
-    #  Redirect all HTTP requests to HTTPS with a 301 (Permanent Redirect)
-    return 301 https://$host$request_uri;
-}
+#     #  Redirect all HTTP requests to HTTPS with a 301 (Permanent Redirect)
+#     return 301 https://$host$request_uri;
+# }
 
 # set config for a virtual server
 server {
     # Listen for HTTPS connections on IPv4 and IPv6
     listen 443 ssl;         #Standard port for HTTPS
     listen [::]:443 ssl;    # IPv6 support for HTTPS
-
-    # SSL certificate and key locations (Self-signed or Let's Encrypt)
-    ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;    # SSL certificate file 
-    ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key; # SSL private key file location
-
-    # Enforce modern SSL/TLS protocols
-    ssl_protocols TLSv1.2 TLSv1.3; # TLSv1.2 and TLSv1.3 are the latest versions of the SSL/TLS protocol
 
     # Define the web root directory and default index file
     index index.php; # Default index file
@@ -31,10 +24,19 @@ server {
 
     # Server name (Uses environment variable for flexibility)
     server_name $DOMAIN_NAME; # Domain name or IP address
+    # SSL certificate and key locations (Self-signed or Let's Encrypt)
+    ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;    # SSL certificate file 
+    ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key; # SSL private key file location
+
+    # Enforce modern SSL/TLS protocols
+    ssl_protocols TLSv1.2 TLSv1.3; # TLSv1.2 and TLSv1.3 are the latest versions of the SSL/TLS protocol
 
     # Location block to handle PHP requests (WordPress)
     location ~ \.php$ {
-        try_files $uri =404; # Check if the file exists
+        try_files $uri $uri/ =404; # Check if the file exists
+    }
+    # Location block to handle PHP requests (WordPress)
+    location ~ \.php$ {
         fastcgi_pass wordpress:9000; # Pass PHP requests to the WordPress container
         include fastcgi_params; # Include the FastCGI parameters
         fastcgi_index index.php; # Default index file
