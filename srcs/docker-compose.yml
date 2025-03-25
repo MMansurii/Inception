@@ -7,7 +7,9 @@ services:
   # Define the database service.
   mariadb:
     # Define the build context for the service.
-    build: ./mariadb
+    build: 
+      context: ./mariadb
+      dockerfile: mariadbDockerFile
     # Define the container name for the service.
     container_name: mariadb
     # Define the environment file for the service.
@@ -30,7 +32,9 @@ services:
   # nginx service
   nginx:
     # Define the build context for the service.
-    build: ./nginx
+    build:
+      context: ./nginx
+      dockerfile: nginxDockerFile
     # Define the container name for the service.
     container_name: nginx
     # Define the volumes for the service.
@@ -57,7 +61,9 @@ services:
   # wordpress service
   wordpress:
     # Define the build context for the service.
-    build: ./wordpress
+    build:
+      context: ./wordpress
+      dockerfile: wordpressDockerFile
     # Define the ports for the service.
     ports:
       - "9000:9000"
