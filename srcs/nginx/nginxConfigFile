@@ -23,7 +23,7 @@ server {
     root /var/www/html; # Root directory of the server
 
     # Server name (Uses environment variable for flexibility)
-    server_name $DOMAIN_NAME; # Domain name or IP address
+    server_name ${DOMAIN_NAME}; # Domain name or IP address
     # SSL certificate and key locations (Self-signed or Let's Encrypt)
     ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;    # SSL certificate file 
     ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key; # SSL private key file location
