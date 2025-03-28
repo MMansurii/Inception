@@ -43,35 +43,46 @@ innodb_log_file_size=64M" > ${MYSQL_CONF} && \
 ############################################################
 ############################################################
 # --------------------  Initialize MariaDB --------------------
-RUN if [ ! -d "${MYSQL_DATA_DIR}/mysql" ]; then \
-        echo " Initializing MariaDB database..." && \
-        mysql_install_db --user=mysql --ldata=${MYSQL_DATA_DIR}; \
-    fi
-#  Initializes the MariaDB data directory.
-# --------------------  Database Initialization & User Setup --------------------
+RUN mkdir -p /docker-entrypoint-initdb.d && \
+    echo '#!/bin/bash\n\
+set -e\n\
+\n\
+if [ ! -d "${MYSQL_DATA_DIR}/mysql" ]; then\n\
+    echo "Initializing MariaDB database..."\n\
+    mysql_install_db --user=mysql --ldata=${MYSQL_DATA_DIR}\n\
+fi\n\
+\n\
+echo "Starting temporary MariaDB instance for setup..."\n\
+mysqld --user=mysql --skip-networking --socket=${MYSQL_RUN_DIR}/mysqld.sock &\n\
+pid="$!"\n\
+\n\
+# Wait for MariaDB to be ready\n\
+for i in {1..30}; do\n\
+    if echo "SELECT 1" | mysql -uroot -S${MYSQL_RUN_DIR}/mysqld.sock &>/dev/null; then\n\
+        break\n\
+    fi\n\
+    echo "Waiting for MariaDB to start..."\n\
+    sleep 2\n\
+done\n\
+\n\
+# Execute setup commands\n\
+mysql -uroot -S${MYSQL_RUN_DIR}/mysqld.sock <<EOF\n\
+ALTER USER '\''root'\''@'\''localhost'\'' IDENTIFIED BY '\''${DATABASE_ROOT_PASSWORD}'\'';\n\
+CREATE DATABASE IF NOT EXISTS \`${DATABASE_NAME}\`;\n\
+CREATE USER IF NOT EXISTS '\''${DATABASE_USER}'\''@'\''%'\'' IDENTIFIED BY '\''${DATABASE_PASSWORD}'\'';\n\
+GRANT ALL PRIVILEGES ON \`${DATABASE_NAME}\`.* TO '\''${DATABASE_USER}'\''@'\''%'\'';\n\
+FLUSH PRIVILEGES;\n\
+EOF\n\
+\n\
+echo "Shutting down temporary MariaDB instance..."\n\
+kill -s TERM "${pid}"\n\
+wait "${pid}"\n\
+\n\
+touch ${MYSQL_DATA_DIR}/.initialized\n\
+echo "Initialization complete."\n\
+' > /docker-entrypoint-initdb.d/init.sh && \
+    chmod +x /docker-entrypoint-initdb.d/init.sh
 
-RUN set -e; \
-    mysqld --user=mysql --skip-networking & \
-    pid="$!"; \
-    while ! mysqladmin ping --silent; do sleep 4; done; \
-    echo "Starting MariaDB"; \
-    mysql -u root <<EOF
-ALTER USER 'root'@'localhost' IDENTIFIED BY '${DATABASE_ROOT_PASSWORD}';
-CREATE DATABASE IF NOT EXISTS \`${DATABASE_NAME}\`;
-CREATE USER IF NOT EXISTS '${DATABASE_USER}'@'%' IDENTIFIED BY '${DATABASE_PASSWORD}';
-GRANT ALL PRIVILEGES ON \`${DATABASE_NAME}\`.* TO '${DATABASE_USER}'@'%';
-FLUSH PRIVILEGES;
-EOF
-
-#  Ensures that `.initialized` is only created after MySQL setup succeeds
-RUN touch ${MYSQL_DATA_DIR}/.initialized
-
-#  Logs that initialization was successful
-RUN echo " Initialization complete."
-
-#  Shuts down MariaDB properly using its PID
-RUN echo "🔻 Shutting down MariaDB..."
-RUN kill $(cat /run/mysqld/mysqld.pid)
 
 
 #   Ensures the script exits on the first error.

@@ -11,8 +11,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PHP_VERSION=7.3 \
     WP_CLI_URL=https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
     WP_PATH=/var/www/html \
-    PHP_FPM_CONF=/etc/php/${PHP_VERSION}/fpm/pool.d/www.conf \
-    PHP_PACKAGES="php php${PHP_VERSION}-fpm php-mysql curl ca-certificates unzip"
+    PHP_FPM_CONF=/etc/php/7.3/fpm/pool.d/www.conf \
+    PHP_PACKAGES="php php7.3 php7.3-fpm php7.3-mysql curl ca-certificates unzip"
 # Define WP-CLI download URL.
 # Set the default WordPress installation path.
 # Define PHP-FPM configuration path.
@@ -20,7 +20,7 @@ ENV PHP_VERSION=7.3 \
 
 # -------------------- Install Required Packages --------------------
 RUN apt-get update && apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends ${PHP_PACKAGES} &&\
+    apt-get install -y --no-install-recommends ${PHP_PACKAGES} && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*  
 # Update package lists and upgrade installed packages.
 # `apt-get clean`: Clears unnecessary cached package files to save space.
@@ -49,16 +49,59 @@ RUN curl -sSLo /usr/local/bin/wp ${WP_CLI_URL} && \
 #    - `-o /usr/local/bin/wp`: Saves WP-CLI to `/usr/local/bin/wp` so it's globally accessible.
 #   `chmod +x /usr/local/bin/wp`: Makes WP-CLI executable.
 
-# --------------------  Download & Configure WordPress --------------------
-RUN if [ ! -f "${WP_PATH}/wp-config.php" ]; then \
-    wp core download --allow-root && \
-    wp config create \
-    --dbname="${DATABASE_NAME}" \
-    --dbuser="${DATABASE_USER}" \
-    --dbpass="${DATABASE_PASSWORD}" \
-    --dbhost="mariadb" \
-    --allow-root; \
-    else echo "✅ WordPress is already installed. Skipping download."; fi  # Skip download if WordPress is already installed.
+# --------------------  Download WordPress Core --------------------
+RUN wp core download --path=${WP_PATH} --allow-root
+#   `wp core download`: Downloads the latest version of WordPress.
+
+# --------------------  Fix PHP-FPM Listening Port --------------------
+RUN sed -i "s|listen = /run/php/php7.3-fpm.sock|listen = 9000|g" ${PHP_FPM_CONF}  
+#   `sed -i`: Edits the file in place (no need to create a backup).
+#   `s|...|...|g`: Finds the default socket configuration and replaces it with `9000`.
+#   Ensures PHP-FPM listens on port 9000, which is required for Nginx to communicate with PHP.
+
+
+# --------------------  Create Startup Script --------------------
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+if [ ! -f "${WP_PATH}/wp-config.php" ]; then\n\
+    echo "Waiting for MariaDB..."\n\
+    while ! mysqladmin ping -h"mariadb" -u"${DATABASE_USER}" -p"${DATABASE_PASSWORD}" --silent; do\n\
+        sleep 2\n\
+    done\n\
+    \n\
+    wp config create \\\n\
+        --dbname="${DATABASE_NAME}" \\\n\
+        --dbuser="${DATABASE_USER}" \\\n\
+        --dbpass="${DATABASE_PASSWORD}" \\\n\
+        --dbhost="mariadb" \\\n\
+        --path=${WP_PATH} \\\n\
+        --allow-root\n\
+    \n\
+    wp core install \\\n\
+        --url="${DOMAIN_NAME}" \\\n\
+        --title="${WORDPRESS_TITLE}" \\\n\
+        --admin_user="${WORDPRESS_USER_ADMIN}" \\\n\
+        --admin_password="${WORDPRESS_PASSWORD_ADMIN}" \\\n\
+        --admin_email="${WORDPRESS_EMAIL_ADMIN}" \\\n\
+        --path=${WP_PATH} \\\n\
+        --allow-root\n\
+    \n\
+    wp user create "${WORDPRESS_USER}" "${WORDPRESS_EMAIL_USER}" \\\n\
+        --user_pass="${WORDPRESS_PASSWORD_USER}" \\\n\
+        --role=author \\\n\
+        --path=${WP_PATH} \\\n\
+        --allow-root\n\
+    \n\
+    wp option update home "https://${DOMAIN_NAME}" --path=${WP_PATH} --allow-root\n\
+    wp option update siteurl "https://${DOMAIN_NAME}" --path=${WP_PATH} --allow-root\n\
+fi\n\
+\n\
+chown -R www-data:www-data ${WP_PATH}\n\
+chmod -R 755 ${WP_PATH}/wp-content/uploads\n\
+\nexec "$@"' > /usr/local/bin/docker-entrypoint.sh && \
+    chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Check if WordPress is already installed.
 # Download WordPress core files.
 # Generate the `wp-config.php` file with database credentials.
@@ -69,32 +112,14 @@ RUN if [ ! -f "${WP_PATH}/wp-config.php" ]; then \
 # Allow WP-CLI to run as root. 
 #  If `wp-config.php` exists, skip the installation process to avoid unnecessary overwrites.
 
-# --------------------  Fix PHP-FPM Listening Port --------------------
-RUN sed -i "s|listen = /run/php/php${PHP_VERSION}-fpm.sock|listen = 9000|g" ${PHP_FPM_CONF}  
-#   `sed -i`: Edits the file in place (no need to create a backup).
-#   `s|...|...|g`: Finds the default socket configuration and replaces it with `9000`.
-#   Ensures PHP-FPM listens on port 9000, which is required for Nginx to communicate with PHP.
+
 
 ##########################################################################################
 ##########################################################################################
 
-# --------------------  Install & Configure WordPress --------------------
-RUN sleep 20 && \
-    wp core install \
-    --url="${DOMAIN_NAME}" \
-    --title="${WORDPRESS_TITLE}" \
-    --admin_user="${WORDPRESS_USER_ADMIN}" \
-    --admin_password="${WORDPRESS_PASSWORD_ADMIN}" \
-    --admin_email="${WORDPRESS_EMAIL_ADMIN}" \
-    --allow-root && \
-    wp user create "${WORDPRESS_USER}" "${WORDPRESS_EMAIL_USER}" \
-    --user_pass="${WORDPRESS_PASSWORD_USER}" --role=author --allow-root && \
-    wp option update home "https://${DOMAIN_NAME}" --allow-root && \
-    wp option update siteurl "https://${DOMAIN_NAME}" --allow-root
 
 # --------------------  Set Correct File Permissions --------------------
-RUN chmod -R 755 ${WP_PATH}/wp-content/uploads && \
-    chown -R www-data:www-data ${WP_PATH}/wp-content/uploads  
+RUN chown -R www-data:www-data ${WP_PATH}
 # Ensure uploads are writable.
 #   `chmod -R 755`:
 #    - `7` → Owner: Read, Write, Execute.
@@ -104,7 +129,8 @@ RUN chmod -R 755 ${WP_PATH}/wp-content/uploads && \
 #   `chown -R www-data:www-data` → Ensures WordPress can write uploaded files.
 
 # --------------------  Start PHP-FPM --------------------
-CMD ["php-fpm${PHP_VERSION}", "-F"]  
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["php-fpm7.3", "-F"]  
 # Run PHP-FPM in the foreground.
 #  `CMD` sets the default command that runs when the container starts.
 #  `"php-fpm${PHP_VERSION}"` → Starts the PHP-FPM service.
