@@ -33,10 +33,7 @@ server {
 
     # Location block to handle PHP requests (WordPress)
     location ~ \.php$ {
-        try_files $uri $uri/ =404; # Check if the file exists
-    }
-    # Location block to handle PHP requests (WordPress)
-    location ~ \.php$ {
+        try_files $uri =404;
         fastcgi_pass wordpress:9000; # Pass PHP requests to the WordPress container
         include fastcgi_params; # Include the FastCGI parameters
         fastcgi_index index.php; # Default index file

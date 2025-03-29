@@ -94,7 +94,7 @@ volumes:
     driver_opts:   # Define the driver options for the volume.
       o: 'bind'     # Binds the volume to the host machine.
       type: 'none'  # Define the type for the volume.
-      device: /workspaces/Inception/mmansuri/data/mariadb  # Define the device for the volume.
+      device: /home/mmansuri/data/mariadb  # Define the device for the volume.
 
 # Define the wordpress_data volume.
   wordpress_data:
@@ -102,7 +102,7 @@ volumes:
     driver_opts:   # Define the driver options for the volume.
       o: 'bind'     # Binds the volume to the host machine.
       type: 'none'  # Define the type for the volume.
-      device: /workspaces/Inception/mmansuri/data/wordpress  # Define the device for the volume.
+      device: /home/mmansuri/data/wordpress  # Define the device for the volume.
 
   
 

@@ -4,18 +4,35 @@
 # Other options include Ubuntu, CentOS, and Alpine
 FROM debian:buster
 
+# Package configuration
+ENV NGINX_CONF_DIR="/etc/nginx/sites-available" \
+    SSL_CERT_DIR="/etc/ssl/certs" \
+    SSL_KEY_DIR="/etc/ssl/private" \
+    CERT_VALID_DAYS=365 \
+    KEY_LENGTH=2048
+
+# SSL Certificate Subject
+ENV SSL_COUNTRY="DE" \
+    SSL_STATE="BW" \
+    SSL_LOCALITY="Heilbronn" \
+    SSL_ORG="42" \
+    SSL_ORG_UNIT="IT" \
+    SSL_COMMON_NAME="localhost"
+
 # Update package list & install Nginx + OpenSSL for HTTPS 
 # - The apt update command updates the package list
 # - The apt install command installs Nginx and OpenSSL
 # - The apt-get clean command cleans up the package cache
 # -y: Assume Yes to all queries and do not prompt
-RUN apt update && apt install -y nginx openssl curl && \
+RUN apt-get update && \
+    apt-get install -y \
+    nginx openssl curl && \
     apt-get clean && rm -rf /var/lib/apt/lists/*  
 
 # Copy the Nginx configuration file
 # - This file will be copied to the /etc/nginx/sites-available directory
 # - The default Nginx configuration file will be replaced with this file
-COPY ./nginxConfigFile /etc/nginx/sites-available/default
+COPY ./nginxConfigFile ${NGINX_CONF_DIR}/default
 
 # Generate a self-signed SSL certificate
 # - The certificate will be stored in the /etc/ssl/certs directory
@@ -35,12 +52,16 @@ COPY ./nginxConfigFile /etc/nginx/sites-available/default
 # -OU: Organizational Unit Name (eg, section)
 # -CN: Common Name (e.g. server FQDN or YOUR name)
 
-RUN openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout /etc/ssl/private/nginx-selfsigned.key \
-    -out /etc/ssl/certs/nginx-selfsigned.crt \
+# Generate SSL certificate
+RUN openssl req -x509 -nodes \
+    -days ${CERT_VALID_DAYS} \
+    -newkey rsa:${KEY_LENGTH} \
+    -keyout ${SSL_KEY_DIR}/nginx-selfsigned.key \
+    -out ${SSL_CERT_DIR}/nginx-selfsigned.crt \
     -subj "/C=DE/ST=BW/L=Heilbronn/O=42/OU=IT/CN=localhost"
 
- # run the command to start Nginx
+EXPOSE 443
+# run the command to start Nginx
 # - The -g option allows you to pass a global configuration directive to Nginx
 # - The daemon off; directive tells Nginx to run in the foreground
 CMD ["nginx", "-g", "daemon off;"]

@@ -5,8 +5,8 @@ NAME = inception
 
 # Docker Compose Path
 DC = docker-compose -f srcs/docker-compose.yml --env-file srcs/.env
-VOLUME_PATH =/workspaces/Inception/mmansuri/data
-VOLUME_PATH_CLEAN = /workspaces/Inception/mmansuri
+VOLUME_PATH =/home/mmansuri/data
+VOLUME_PATH_CLEAN = /home/mmansuri
 
 # Default Target
 all: up
@@ -24,7 +24,6 @@ build:folders
 
 # Run the docker container
 up:build
-	sudo systemctl stop mariadb
 	@$(DC) up -d
 	@echo "Inception is up and running...\n"
 
@@ -55,11 +54,10 @@ stop:
 	
 clean:
 	@echo "Cleaning the inception...\n"
-	@docker ps -q --filter "name=mariadb\|wordpress\|nginx" | xargs -r docker rm -f
-	@docker images -q mariadb wordpress nginx | xargs -r docker rmi -f
-	@docker volume ls -qf dangling=true | xargs -r docker volume rm
+	@docker rm -f mariadb wordpress nginx
+	@docker rmi -f mariadb wordpress nginx
+	@docker volume rm $(shell docker volume ls -q)
 	@docker system prune -a -f
-	@sudo rm -rf $(VOLUME_PATH_CLEAN)
 
 # Remove all the docker containers and images and start fresh
 re: clean all
