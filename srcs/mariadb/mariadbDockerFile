@@ -1,108 +1,24 @@
-# --------------------  Base Image --------------------
-# Use Debian Buster as the base OS for MariaDB
+# =============================================
+# MariaDB Dockerfile
+# Use Debian Buster as the base image
 FROM debian:buster
-# --------------------  Set Environment Variables --------------------
-ENV DEBIAN_FRONTEND=noninteractive \
-    MYSQL_DATA_DIR=/var/lib/mysql \
-    MYSQL_CONF=/etc/mysql/mariadb.conf.d/50-server.cnf \
-    MYSQL_RUN_DIR=/run/mysqld \
-    MYSQL_PACKAGES="mariadb-server openssl"
-# --------------------  Install Required Packages --------------------
+# --------------------------------------------------
+# Package Installation
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ${MYSQL_PACKAGES} && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-# --------------------  Create Required Directories & Set Permissions --------------------
-RUN install -d -m 755 -o mysql -g mysql ${MYSQL_RUN_DIR}
-#   `install -d` → Ensures the directory exists before setting permissions.
-#   `-m 755` → Sets directory permissions:
-#    - `7` → Owner (Read, Write, Execute).
-#    - `5` → Group (Read, Execute).
-#    - `5` → Others (Read, Execute).
-#   `-o mysql -g mysql` → Assigns ownership to the MySQL system user.
-# --------------------  Copy MariaDB Configuration --------------------
-# Instead of copying an external file, we write the config directly in the Dockerfile.
-RUN echo "[mysqld]\n\
-bind-address = 0.0.0.0\n\
-skip-networking=0\n\
-skip-bind-address\n\
-max_connections=200\n\
-default_storage_engine=InnoDB\n\
-innodb_flush_method=O_DIRECT\n\
-innodb_log_file_size=64M" > ${MYSQL_CONF} && \
-    chmod 644 ${MYSQL_CONF}  # Set correct permissions for the config file
-# Allows remote access to MariaDB by binding to all network interfaces.
-#  Ensures networking is enabled.
-#  Disables bind address restrictions.
-#  Sets a reasonable limit for concurrent database connections.
-#  Uses InnoDB as the default storage engine.
-#  Improves database I/O performance.
-#  Sets log file size for InnoDB.
-#  Ensures the configuration file is readable by MariaDB.
-############################################################
-############################################################
-############################################################
-# --------------------  Initialize MariaDB --------------------
-RUN mkdir -p /docker-entrypoint-initdb.d && \
-    echo '#!/bin/bash\n\
-set -e\n\
-\n\
-if [ ! -d "${MYSQL_DATA_DIR}/mysql" ]; then\n\
-    echo "Initializing MariaDB database..."\n\
-    mysql_install_db --user=mysql --ldata=${MYSQL_DATA_DIR}\n\
-fi\n\
-\n\
-echo "Starting temporary MariaDB instance for setup..."\n\
-mysqld --user=mysql --skip-networking --socket=${MYSQL_RUN_DIR}/mysqld.sock &\n\
-pid="$!"\n\
-\n\
-# Wait for MariaDB to be ready\n\
-for i in {1..30}; do\n\
-    if echo "SELECT 1" | mysql -uroot -S${MYSQL_RUN_DIR}/mysqld.sock &>/dev/null; then\n\
-        break\n\
-    fi\n\
-    echo "Waiting for MariaDB to start..."\n\
-    sleep 2\n\
-done\n\
-\n\
-# Execute setup commands\n\
-mysql -uroot -S${MYSQL_RUN_DIR}/mysqld.sock <<EOF\n\
-ALTER USER '\''root'\''@'\''localhost'\'' IDENTIFIED BY '\''${DATABASE_ROOT_PASSWORD}'\'';\n\
-CREATE DATABASE IF NOT EXISTS \`${DATABASE_NAME}\`;\n\
-CREATE USER IF NOT EXISTS '\''${DATABASE_USER}'\''@'\''%'\'' IDENTIFIED BY '\''${DATABASE_PASSWORD}'\'';\n\
-GRANT ALL PRIVILEGES ON \`${DATABASE_NAME}\`.* TO '\''${DATABASE_USER}'\''@'\''%'\'';\n\
-FLUSH PRIVILEGES;\n\
-EOF\n\
-\n\
-echo "Shutting down temporary MariaDB instance..."\n\
-kill -s TERM "${pid}"\n\
-wait "${pid}"\n\
-\n\
-touch ${MYSQL_DATA_DIR}/.initialized\n\
-echo "Initialization complete."\n\
-' > /docker-entrypoint-initdb.d/init.sh && \
-    chmod +x /docker-entrypoint-initdb.d/init.sh
-
-
-
-#   Ensures the script exits on the first error.
-#   Starts MySQL in the background without external connections.
-#   Captures the MySQL process ID.
-#   Waits for MySQL to be fully up before proceeding.
-#   Executes SQL commands as the root user.
-#   Secures the root account with a password.
-#   Creates the database if it doesn’t exist.
-#   Creates a database user if not already present.
-#   Grants full permissions to the new user.
-#   Refreshes the privilege tables to apply changes.
-#   Creates a marker file to indicate the database is initialized. 
-#   Shuts down MySQL safely using its PID file.
-
-EXPOSE 3306  
-#   Ensures that MariaDB can be accessed from other containers or the host machine.
-# --------------------  Start MariaDB --------------------
-CMD ["mysqld", "--user=mysql", "--console"]
-#   Runs MySQL in the foreground as the main process inside the container.
-############################################################
-
-# --------------------   END   --------------------
+    apt-get install -y mariadb-server openssl && \
+    apt-get clean
+# --------------------------------------------------
+# Configuration and Script
+COPY ./mrun.sh /mrun.sh
+# Make the initialization script executable
+RUN chmod +x /mrun.sh
+# --------------------------------------------------
+# Network Configuration
+# Expose the default MySQL/MariaDB port (3306)
+EXPOSE 3306
+# --------------------------------------------------
+# Container Startup
+# --------------------------------------------------
+# Set the initialization script as the default command
+# This runs when the container starts
+CMD ["sh", "/mrun.sh"]
